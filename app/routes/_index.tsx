@@ -44,18 +44,19 @@ export default function Index() {
         </div>
 
         {/* Symbol Selection */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Select Symbol</h2>
-          <div className="flex justify-center gap-4">
+        <div className="space-y-6">
+          <h2 className="text-2xl font-semibold text-center">Select Symbol</h2>
+          <div className="flex justify-center gap-8">
             {SYMBOLS.map((symbol) => (
               <button
                 key={symbol.id}
                 onClick={() => handleSymbolClick(symbol.id)}
-                className={`w-16 h-16 text-3xl ${symbol.color} bg-gray-800 rounded-lg 
+                className={`w-24 h-24 text-5xl ${symbol.color} bg-gray-800 rounded-xl 
                   hover:bg-gray-700 transform hover:scale-110 transition-all
                   flex items-center justify-center border border-gray-700
                   hover:border-gray-500 focus:outline-none focus:ring-2 
-                  focus:ring-purple-500 focus:border-transparent`}
+                  focus:ring-purple-500 focus:border-transparent
+                  shadow-lg hover:shadow-xl`}
               >
                 {symbol.symbol}
               </button>
