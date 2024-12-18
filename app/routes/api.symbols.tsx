@@ -13,6 +13,8 @@ export const action: ActionFunction = async ({ request }) => {
     const studentId = Number(formData.get("studentId"));
     const symbol = Number(formData.get("symbol"));
 
+    console.log("Processing symbol submission:", { studentId, symbol });
+
     // Validate inputs
     if (!validateStudentId(studentId)) {
       return json({ error: "Invalid student ID" }, { status: 400 });
@@ -30,6 +32,7 @@ export const action: ActionFunction = async ({ request }) => {
     });
 
     if (!session) {
+      console.log("Creating new session for student:", studentId);
       session = await db.sessions.create({
         data: {
           student_id: studentId,
@@ -49,7 +52,9 @@ export const action: ActionFunction = async ({ request }) => {
       }
     });
 
-    // Update the session's last_five_symbols
+    console.log("Created symbol observation:", observation);
+
+    // Get all recent symbols for entropy calculation
     const recentSymbols = await db.symbol_observations.findMany({
       where: {
         session_id: session.session_id
@@ -63,19 +68,36 @@ export const action: ActionFunction = async ({ request }) => {
       }
     });
 
+    console.log("Recent symbols:", recentSymbols);
+
+    // Calculate entropy
+    const symbols = recentSymbols.map(s => s.symbol);
+    const uniqueSymbols = new Set(symbols);
+    const entropy = (uniqueSymbols.size / symbols.length) * 100;
+
+    console.log("Entropy calculation:", {
+      symbols,
+      uniqueCount: uniqueSymbols.size,
+      total: symbols.length,
+      entropy
+    });
+
+    // Update the session
     await db.sessions.update({
       where: {
         session_id: session.session_id
       },
       data: {
-        last_five_symbols: recentSymbols.map(s => s.symbol)
+        last_five_symbols: symbols
       }
     });
 
     return json({ 
       success: true, 
       observation,
-      session
+      session,
+      entropy,
+      recentSymbols: symbols
     });
   } catch (error) {
     console.error("Failed to process symbol:", error);

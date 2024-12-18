@@ -79,6 +79,8 @@ export default function Index() {
       formData.append("studentId", selectedStudentId.toString());
       formData.append("symbol", symbolId.toString());
 
+      console.log("Submitting symbol:", { studentId: selectedStudentId, symbolId });
+
       const response = await fetch("/api/symbols", {
         method: "POST",
         body: formData,
@@ -89,14 +91,19 @@ export default function Index() {
       }
 
       const data = await response.json();
+      console.log("Symbol submission response:", data);
 
-      // Create new symbols array with defensive check
-      const currentSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
-      const newSymbols = [...currentSymbols, symbolId].slice(-5);
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Update symbols and entropy
+      const newSymbols = data.recentSymbols || [];
+      console.log("Updating symbols:", newSymbols);
+      console.log("Updating entropy:", data.entropy);
 
       setSelectedSymbols(newSymbols);
       setEntropy(data.entropy);
-      setPatterns(Array.isArray(data.patterns) ? data.patterns : []);
       setError(null);
     } catch (err) {
       console.error("handleSymbolClick Error:", err);
