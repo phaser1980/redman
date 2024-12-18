@@ -1,8 +1,9 @@
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { useState } from "react";
-import { EntropyDisplay } from "~/components/EntropyDisplay";
-import { PatternDisplay } from "~/components/PatternDisplay";
+import { useState, useEffect } from "react";
+import EntropyDisplay from "~/components/EntropyDisplay";
+import PatternDisplay from "~/components/PatternDisplay";
+import StudentSelector from "~/components/StudentSelector";
 
 const SYMBOLS = [
   { id: 1, name: "Hearts", symbol: "♥", color: "text-red-500" },
@@ -12,22 +13,97 @@ const SYMBOLS = [
 ];
 
 export default function Index() {
+  const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [selectedSymbols, setSelectedSymbols] = useState<number[]>([]);
-  const [entropy, setEntropy] = useState(0);
-  const [patterns, setPatterns] = useState([]);
+  const [entropy, setEntropy] = useState<number | null>(null);
+  const [patterns, setPatterns] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  // Mock predictions for now
-  const predictions = [
-    { model: "Pattern Matcher", prediction: "♥", confidence: 85 },
-    { model: "Sequence Predictor", prediction: "♣", confidence: 72 },
-  ];
+  // Create a safe version of selectedSymbols that's always an array
+  const safeSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
 
-  const handleSymbolClick = (symbolId: number) => {
-    const newSymbols = [...selectedSymbols, symbolId].slice(-5);
-    setSelectedSymbols(newSymbols);
-    
-    // Mock entropy calculation - replace with actual API call
-    setEntropy(Math.min(Math.random() * 100, 100));
+  // Debugging logs after state initialization
+  useEffect(() => {
+    console.log("Component Mount/Update - selectedSymbols:", selectedSymbols);
+    console.log("Safe Symbols Array:", safeSymbols);
+  }, [selectedSymbols]);
+
+  const handleStudentChange = async (studentId: number | null) => {
+    console.log("handleStudentChange - Start, studentId:", studentId);
+    setSelectedStudentId(studentId);
+    setSelectedSymbols([]); // Reset symbols immediately
+    setEntropy(null);
+    setPatterns([]);
+    setError(null);
+
+    if (studentId) {
+      setIsLoading(true);
+      try {
+        const [historyResponse, patternsResponse] = await Promise.all([
+          fetch(`/api/symbols/history/${studentId}`),
+          fetch(`/api/patterns/${studentId}`),
+        ]);
+
+        if (!historyResponse.ok || !patternsResponse.ok) {
+          throw new Error("Failed to fetch student data");
+        }
+
+        const history = await historyResponse.json();
+        const patterns = await patternsResponse.json();
+
+        // Ensure we have arrays before updating state
+        const safeHistory = Array.isArray(history) ? history.slice(-5) : [];
+        const safePatterns = Array.isArray(patterns) ? patterns : [];
+
+        setSelectedSymbols(safeHistory);
+        setPatterns(safePatterns);
+      } catch (err) {
+        console.error("handleStudentChange Error:", err);
+        setError(err instanceof Error ? err.message : "Failed to load student data");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleSymbolClick = async (symbolId: number) => {
+    if (!selectedStudentId) {
+      setError("Please select a student first");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("studentId", selectedStudentId.toString());
+      formData.append("symbol", symbolId.toString());
+
+      const response = await fetch("/api/symbols", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to record symbol");
+      }
+
+      const data = await response.json();
+
+      // Create new symbols array with defensive check
+      const currentSymbols = Array.isArray(selectedSymbols) ? selectedSymbols : [];
+      const newSymbols = [...currentSymbols, symbolId].slice(-5);
+
+      setSelectedSymbols(newSymbols);
+      setEntropy(data.entropy);
+      setPatterns(Array.isArray(data.patterns) ? data.patterns : []);
+      setError(null);
+    } catch (err) {
+      console.error("handleSymbolClick Error:", err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -43,16 +119,35 @@ export default function Index() {
           </p>
         </div>
 
+        {/* Student Selector */}
+        <div className="mb-8">
+          <StudentSelector
+            onStudentChange={handleStudentChange}
+            selectedStudentId={selectedStudentId}
+          />
+          {error && (
+            <div className="mt-2 text-red-500 text-sm">{error}</div>
+          )}
+        </div>
+
         {/* Symbol Selection */}
         <div className="space-y-6">
-          <h2 className="text-2xl font-semibold text-center">Select Symbol</h2>
+          <h2 className="text-2xl font-semibold text-center">
+            {selectedStudentId ? "Select Symbol" : "Select a student to begin"}
+          </h2>
           <div className="flex justify-center gap-8">
             {SYMBOLS.map((symbol) => (
               <button
                 key={symbol.id}
                 onClick={() => handleSymbolClick(symbol.id)}
-                className={`w-24 h-24 text-5xl ${symbol.color} bg-gray-800 rounded-xl 
-                  hover:bg-gray-700 transform hover:scale-110 transition-all
+                disabled={!selectedStudentId || isLoading}
+                className={`w-24 h-24 text-5xl ${symbol.color} 
+                  ${
+                    !selectedStudentId || isLoading
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-gray-700 transform hover:scale-110"
+                  }
+                  bg-gray-800 rounded-xl transition-all
                   flex items-center justify-center border border-gray-700
                   hover:border-gray-500 focus:outline-none focus:ring-2 
                   focus:ring-purple-500 focus:border-transparent
@@ -68,69 +163,46 @@ export default function Index() {
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Last 5 Symbols</h2>
           <div className="flex justify-center gap-3">
-            {selectedSymbols.length === 0 ? (
-              <p className="text-gray-500 italic">Start by selecting symbols above...</p>
+            {!selectedStudentId ? (
+              <p className="text-gray-500 italic">Select a student to begin...</p>
+            ) : isLoading ? (
+              <p className="text-gray-500 italic">Loading...</p>
+            ) : safeSymbols.length === 0 ? (
+              <p className="text-gray-500 italic">No symbols selected yet...</p>
             ) : (
-              selectedSymbols.map((id, index) => {
-                const symbol = SYMBOLS.find(s => s.id === id);
-                return (
+              safeSymbols.map((id, index) => {
+                const symbol = SYMBOLS.find((s) => s.id === id);
+                return symbol ? (
                   <div
                     key={index}
-                    className={`w-12 h-12 ${symbol?.color} bg-gray-800 rounded-lg
+                    className={`w-12 h-12 ${symbol.color} bg-gray-800 rounded-lg
                       flex items-center justify-center text-2xl border border-gray-700`}
                   >
-                    {symbol?.symbol}
+                    {symbol.symbol}
                   </div>
-                );
+                ) : null;
               })
             )}
           </div>
         </div>
 
-        {/* Predictions */}
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Model Predictions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {predictions.map((prediction, index) => (
-              <div
-                key={index}
-                className="bg-gray-800 rounded-lg p-4 border border-gray-700
-                  hover:border-gray-600 transition-colors"
-              >
-                <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-medium text-gray-300">{prediction.model}</h3>
-                  <span className="text-sm text-gray-500">
-                    {prediction.confidence}% confident
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-3xl">{prediction.prediction}</div>
-                  <div className="h-2 flex-grow bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-purple-500"
-                      style={{ width: `${prediction.confidence}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Entropy & Patterns */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Randomness Level</h2>
-            <EntropyDisplay entropy={entropy} />
+        {selectedStudentId && !isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {entropy !== null && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold">Randomness Level</h2>
+                <EntropyDisplay entropy={entropy} studentId={selectedStudentId} />
+              </div>
+            )}
+            {patterns.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-semibold">Detected Patterns</h2>
+                <PatternDisplay patterns={patterns} studentId={selectedStudentId} />
+              </div>
+            )}
           </div>
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Detected Patterns</h2>
-            <PatternDisplay 
-              patterns={patterns} 
-              symbols={SYMBOLS}
-            />
-          </div>
-        </div>
+        )}
       </div>
     </div>
   );

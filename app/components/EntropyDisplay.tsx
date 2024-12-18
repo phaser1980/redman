@@ -1,74 +1,111 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface EntropyDisplayProps {
-  entropy: number;
+  entropy: number | null;
+  studentId: number;
 }
 
-export const EntropyDisplay: React.FC<EntropyDisplayProps> = ({ entropy }) => {
-  if (entropy === undefined || entropy === null) {
+function EntropyDisplay({ entropy = 0, studentId }: EntropyDisplayProps) {
+  const [historicalEntropy, setHistoricalEntropy] = useState<number[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchHistoricalEntropy = async () => {
+      if (!studentId) return;
+      
+      setIsLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`/api/entropy/history/${studentId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setHistoricalEntropy(Array.isArray(data.history) ? data.history : []);
+        } else {
+          throw new Error('Failed to fetch entropy history');
+        }
+      } catch (error) {
+        console.error('Failed to fetch entropy history:', error);
+        setError('Failed to load entropy history');
+        setHistoricalEntropy([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchHistoricalEntropy();
+  }, [studentId]);
+
+  const getEntropyColor = (value: number) => {
+    if (value >= 80) return 'text-green-500';
+    if (value >= 60) return 'text-yellow-500';
+    return 'text-red-500';
+  };
+
+  const getEntropyMessage = (value: number) => {
+    if (value >= 80) return 'High randomness - Great job!';
+    if (value >= 60) return 'Moderate randomness - Keep improving!';
+    return 'Low randomness - Try to be more random!';
+  };
+
+  // Handle loading and error states
+  if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-white">Randomness Level</h3>
-          <span className="text-sm text-gray-400">Loading...</span>
-        </div>
-        <div className="h-4 bg-gray-700 rounded-full"></div>
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <p className="text-gray-400">Loading entropy data...</p>
       </div>
     );
   }
 
-  const getEntropyColor = (value: number) => {
-    if (value < 30) return 'from-green-500 to-green-600';
-    if (value < 70) return 'from-yellow-500 to-yellow-600';
-    return 'from-red-500 to-red-600';
-  };
+  if (error) {
+    return (
+      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
 
-  const getEntropyMessage = (value: number) => {
-    if (value < 30) return 'Highly Predictable';
-    if (value < 70) return 'Moderately Random';
-    return 'Highly Random';
-  };
-
-  const getEntropyDescription = (value: number) => {
-    if (value < 30) {
-      return 'Your inputs show clear patterns. Try mixing up your choices more!';
-    }
-    if (value < 70) {
-      return 'Good variety in your choices, but there might still be some patterns.';
-    }
-    return 'Your inputs are very unpredictable - keep it up!';
-  };
+  // Ensure entropy is a number
+  const safeEntropy = typeof entropy === 'number' ? entropy : 0;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">
-            {entropy.toFixed(1)}%
-          </span>
-          <span className="text-sm font-medium text-white">
-            {getEntropyMessage(entropy)}
+    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400">Current Entropy:</span>
+          <span className={`text-2xl font-bold ${getEntropyColor(safeEntropy)}`}>
+            {safeEntropy.toFixed(1)}%
           </span>
         </div>
-      </div>
-
-      <div className="relative h-4 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className={`absolute inset-y-0 left-0 bg-gradient-to-r ${getEntropyColor(entropy)} transition-all duration-500 ease-out`}
-          style={{ width: `${entropy}%` }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent animate-shimmer"></div>
+        
+        <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+          <div
+            className={`h-full ${getEntropyColor(safeEntropy)} transition-all duration-500`}
+            style={{ width: `${safeEntropy}%` }}
+          />
         </div>
-      </div>
+        
+        <p className={`text-sm ${getEntropyColor(safeEntropy)}`}>
+          {getEntropyMessage(safeEntropy)}
+        </p>
 
-      <div className="space-y-2">
-        <p className="text-sm text-gray-400">
-          {getEntropyDescription(entropy)}
-        </p>
-        <p className="text-xs text-gray-500">
-          Tip: Mix up your choices and avoid repeating patterns to increase randomness!
-        </p>
+        {historicalEntropy.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-sm text-gray-400 mb-2">Historical Entropy</h3>
+            <div className="flex space-x-1">
+              {historicalEntropy.map((value, index) => (
+                <div
+                  key={index}
+                  className={`flex-1 h-1 rounded-full ${getEntropyColor(value)}`}
+                  style={{ opacity: 0.3 + (index / historicalEntropy.length) * 0.7 }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
-};
+}
+
+export default EntropyDisplay;
