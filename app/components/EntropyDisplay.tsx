@@ -5,8 +5,14 @@ interface EntropyDisplayProps {
   studentId: number;
 }
 
+interface EntropyHistoryItem {
+  entropy_value: number;
+  timestamp: string;
+  window_size: number;
+}
+
 function EntropyDisplay({ entropy = 0, studentId }: EntropyDisplayProps) {
-  const [historicalEntropy, setHistoricalEntropy] = useState<number[]>([]);
+  const [historicalEntropy, setHistoricalEntropy] = useState<EntropyHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,12 +24,14 @@ function EntropyDisplay({ entropy = 0, studentId }: EntropyDisplayProps) {
       setError(null);
       try {
         const response = await fetch(`/api/entropy/history/${studentId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setHistoricalEntropy(Array.isArray(data.history) ? data.history : []);
-        } else {
+        if (!response.ok) {
           throw new Error('Failed to fetch entropy history');
         }
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        setHistoricalEntropy(Array.isArray(data.history) ? data.history : []);
       } catch (error) {
         console.error('Failed to fetch entropy history:', error);
         setError('Failed to load entropy history');
@@ -57,14 +65,6 @@ function EntropyDisplay({ entropy = 0, studentId }: EntropyDisplayProps) {
     );
   }
 
-  if (error) {
-    return (
-      <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
-  }
-
   // Ensure entropy is a number
   const safeEntropy = typeof entropy === 'number' ? entropy : 0;
 
@@ -93,15 +93,20 @@ function EntropyDisplay({ entropy = 0, studentId }: EntropyDisplayProps) {
           <div className="mt-6">
             <h3 className="text-sm text-gray-400 mb-2">Historical Entropy</h3>
             <div className="flex space-x-1">
-              {historicalEntropy.map((value, index) => (
+              {historicalEntropy.map((item, index) => (
                 <div
                   key={index}
-                  className={`flex-1 h-1 rounded-full ${getEntropyColor(value)}`}
+                  className={`flex-1 h-1 rounded-full ${getEntropyColor(item.entropy_value)}`}
                   style={{ opacity: 0.3 + (index / historicalEntropy.length) * 0.7 }}
+                  title={`Entropy: ${item.entropy_value.toFixed(1)}%`}
                 />
               ))}
             </div>
           </div>
+        )}
+
+        {error && (
+          <p className="text-red-500 text-sm mt-2">{error}</p>
         )}
       </div>
     </div>
