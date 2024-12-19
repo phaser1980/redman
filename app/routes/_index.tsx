@@ -18,6 +18,8 @@ export default function Index() {
   const [entropy, setEntropy] = useState<number | null>(null);
   const [symbolCount, setSymbolCount] = useState<number>(0);
   const [patterns, setPatterns] = useState<any[]>([]);
+  const [monteCarloData, setMonteCarloData] = useState<any>(null);
+  const [viData, setViData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -35,18 +37,41 @@ export default function Index() {
     const fetchSymbolCount = async () => {
       if (!selectedStudentId) {
         setSymbolCount(0);
+        setMonteCarloData(null);
+        setViData(null);
         return;
       }
 
       try {
-        const response = await fetch(`/api/symbols/count/${selectedStudentId}`);
-        if (!response.ok) {
+        const [countResponse, monteCarloResponse, viResponse] = await Promise.all([
+          fetch(`/api/symbols/count/${selectedStudentId}`),
+          fetch(`/api/montecarlo/${selectedStudentId}`),
+          fetch(`/api/vi/${selectedStudentId}`)
+        ]);
+
+        if (!countResponse.ok) {
           throw new Error('Failed to fetch symbol count');
         }
-        const data = await response.json();
-        setSymbolCount(data.totalSymbols);
+
+        const [countData, monteCarloData, viData] = await Promise.all([
+          countResponse.json(),
+          monteCarloResponse.json(),
+          viResponse.json()
+        ]);
+
+        setSymbolCount(countData.totalSymbols);
+        
+        if (monteCarloData && !monteCarloData.error) {
+          console.log('Setting Monte Carlo data:', monteCarloData);
+          setMonteCarloData(monteCarloData);
+        }
+
+        if (viData && !viData.error) {
+          console.log('Setting VI data:', viData);
+          setViData(viData);
+        }
       } catch (err) {
-        console.error('Failed to fetch symbol count:', err);
+        console.error('Failed to fetch data:', err);
       }
     };
 
@@ -59,22 +84,30 @@ export default function Index() {
     setSelectedSymbols([]);
     setEntropy(null);
     setPatterns([]);
+    setMonteCarloData(null);
+    setViData(null);
     setError(null);
 
     if (studentId) {
       setIsLoading(true);
       try {
-        const [historyResponse, patternsResponse] = await Promise.all([
+        const [historyResponse, patternsResponse, monteCarloResponse, viResponse] = await Promise.all([
           fetch(`/api/symbols/history/${studentId}`),
           fetch(`/api/patterns/${studentId}`),
+          fetch(`/api/montecarlo/${studentId}`),
+          fetch(`/api/vi/${studentId}`)
         ]);
 
         if (!historyResponse.ok || !patternsResponse.ok) {
           throw new Error("Failed to fetch student data");
         }
 
-        const history = await historyResponse.json();
-        const patterns = await patternsResponse.json();
+        const [history, patterns, monteCarloData, viData] = await Promise.all([
+          historyResponse.json(),
+          patternsResponse.json(),
+          monteCarloResponse.json(),
+          viResponse.json()
+        ]);
 
         // Ensure we have arrays before updating state
         const safeHistory = Array.isArray(history) ? history.slice(-5) : [];
@@ -82,6 +115,16 @@ export default function Index() {
 
         setSelectedSymbols(safeHistory);
         setPatterns(safePatterns);
+
+        if (monteCarloResponse.ok && monteCarloData && !monteCarloData.error) {
+          console.log('Setting Monte Carlo data:', monteCarloData);
+          setMonteCarloData(monteCarloData);
+        }
+
+        if (viResponse.ok && viData && !viData.error) {
+          console.log('Setting VI data:', viData);
+          setViData(viData);
+        }
       } catch (err) {
         console.error("handleStudentChange Error:", err);
         setError(err instanceof Error ? err.message : "Failed to load student data");
@@ -105,30 +148,53 @@ export default function Index() {
 
       console.log("Submitting symbol:", { studentId: selectedStudentId, symbolId });
 
-      const response = await fetch("/api/symbols", {
-        method: "POST",
-        body: formData,
-      });
+      // Submit symbol and fetch all analyses in parallel
+      const [symbolResponse, monteCarloResponse, viResponse] = await Promise.all([
+        fetch("/api/symbols", {
+          method: "POST",
+          body: formData,
+        }),
+        fetch(`/api/montecarlo/${selectedStudentId}`),
+        fetch(`/api/vi/${selectedStudentId}`)
+      ]);
 
-      if (!response.ok) {
+      if (!symbolResponse.ok) {
         throw new Error("Failed to record symbol");
       }
 
-      const data = await response.json();
-      console.log("Symbol submission response:", data);
+      const [symbolData, monteCarloData, viData] = await Promise.all([
+        symbolResponse.json(),
+        monteCarloResponse.json(),
+        viResponse.json()
+      ]);
 
-      if (data.error) {
-        throw new Error(data.error);
+      console.log("Symbol submission response:", symbolData);
+      console.log("Monte Carlo analysis:", monteCarloData);
+      console.log("VI analysis:", viData);
+
+      if (symbolData.error) {
+        throw new Error(symbolData.error);
       }
 
       // Update symbols and entropy
-      const newSymbols = data.recentSymbols || [];
+      const newSymbols = symbolData.recentSymbols || [];
       console.log("Updating symbols:", newSymbols);
-      console.log("Updating entropy:", data.entropy);
+      console.log("Updating entropy:", symbolData.entropy);
 
       setSelectedSymbols(newSymbols);
-      setEntropy(data.entropy);
-      setSymbolCount(data.totalSymbols);
+      setEntropy(symbolData.entropy);
+      setSymbolCount(symbolData.totalSymbols);
+      
+      if (monteCarloData && !monteCarloData.error) {
+        console.log('Setting Monte Carlo data after symbol update:', monteCarloData);
+        setMonteCarloData(monteCarloData);
+      }
+
+      if (viData && !viData.error) {
+        console.log('Setting VI data after symbol update:', viData);
+        setViData(viData);
+      }
+      
       setError(null);
     } catch (err) {
       console.error("handleSymbolClick Error:", err);
@@ -160,6 +226,22 @@ export default function Index() {
       setEntropy(data.entropy);
       setSymbolCount(data.totalSymbols);
       setError(null);
+
+      const monteCarloResponse = await fetch(`/api/montecarlo/${selectedStudentId}`);
+      const monteCarloData = await monteCarloResponse.json();
+
+      if (monteCarloResponse.ok && monteCarloData && !monteCarloData.error) {
+        console.log('Setting Monte Carlo data:', monteCarloData);
+        setMonteCarloData(monteCarloData);
+      }
+
+      const viResponse = await fetch(`/api/vi/${selectedStudentId}`);
+      const viData = await viResponse.json();
+
+      if (viResponse.ok && viData && !viData.error) {
+        console.log('Setting VI data:', viData);
+        setViData(viData);
+      }
     } catch (err) {
       console.error('Failed to undo symbol:', err);
       setError(err instanceof Error ? err.message : 'Failed to undo symbol');
@@ -188,6 +270,8 @@ export default function Index() {
       setEntropy(null);
       setSymbolCount(0);
       setError(null);
+      setMonteCarloData(null);
+      setViData(null);
     } catch (err) {
       console.error('Failed to clear symbols:', err);
       setError(err instanceof Error ? err.message : 'Failed to clear symbols');
@@ -310,7 +394,13 @@ export default function Index() {
             {entropy !== null && (
               <div className="space-y-4">
                 <h2 className="text-xl font-semibold">Randomness Level</h2>
-                <EntropyDisplay entropy={entropy} studentId={selectedStudentId} />
+                <EntropyDisplay
+                  entropy={entropy ?? 0}
+                  studentId={selectedStudentId}
+                  symbols={safeSymbols}
+                  monteCarloData={monteCarloData}
+                  viData={viData}
+                />
               </div>
             )}
             {patterns.length > 0 && (
