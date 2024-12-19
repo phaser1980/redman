@@ -20,6 +20,8 @@ export default function Index() {
   const [patterns, setPatterns] = useState<any[]>([]);
   const [monteCarloData, setMonteCarloData] = useState<any>(null);
   const [viData, setViData] = useState<any>(null);
+  const [ensembleData, setEnsembleData] = useState<any>(null);
+  const [hmmData, setHmmData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -39,24 +41,30 @@ export default function Index() {
         setSymbolCount(0);
         setMonteCarloData(null);
         setViData(null);
+        setEnsembleData(null);
+        setHmmData(null);
         return;
       }
 
       try {
-        const [countResponse, monteCarloResponse, viResponse] = await Promise.all([
+        const [countResponse, monteCarloResponse, viResponse, ensembleResponse, hmmResponse] = await Promise.all([
           fetch(`/api/symbols/count/${selectedStudentId}`),
           fetch(`/api/montecarlo/${selectedStudentId}`),
-          fetch(`/api/vi/${selectedStudentId}`)
+          fetch(`/api/vi/${selectedStudentId}`),
+          fetch(`/api/ensemble/${selectedStudentId}`),
+          fetch(`/api/hmm/${selectedStudentId}`)
         ]);
 
         if (!countResponse.ok) {
           throw new Error('Failed to fetch symbol count');
         }
 
-        const [countData, monteCarloData, viData] = await Promise.all([
+        const [countData, monteCarloData, viData, ensembleData, hmmData] = await Promise.all([
           countResponse.json(),
           monteCarloResponse.json(),
-          viResponse.json()
+          viResponse.json(),
+          ensembleResponse.json(),
+          hmmResponse.json()
         ]);
 
         setSymbolCount(countData.totalSymbols);
@@ -69,6 +77,16 @@ export default function Index() {
         if (viData && !viData.error) {
           console.log('Setting VI data:', viData);
           setViData(viData);
+        }
+
+        if (ensembleData && !ensembleData.error) {
+          console.log('Setting Ensemble data:', ensembleData);
+          setEnsembleData(ensembleData);
+        }
+
+        if (hmmData && !hmmData.error) {
+          console.log('Setting HMM data:', hmmData);
+          setHmmData(hmmData);
         }
       } catch (err) {
         console.error('Failed to fetch data:', err);
@@ -86,27 +104,33 @@ export default function Index() {
     setPatterns([]);
     setMonteCarloData(null);
     setViData(null);
+    setEnsembleData(null);
+    setHmmData(null);
     setError(null);
 
     if (studentId) {
       setIsLoading(true);
       try {
-        const [historyResponse, patternsResponse, monteCarloResponse, viResponse] = await Promise.all([
+        const [historyResponse, patternsResponse, monteCarloResponse, viResponse, ensembleResponse, hmmResponse] = await Promise.all([
           fetch(`/api/symbols/history/${studentId}`),
           fetch(`/api/patterns/${studentId}`),
           fetch(`/api/montecarlo/${studentId}`),
-          fetch(`/api/vi/${studentId}`)
+          fetch(`/api/vi/${studentId}`),
+          fetch(`/api/ensemble/${studentId}`),
+          fetch(`/api/hmm/${studentId}`)
         ]);
 
         if (!historyResponse.ok || !patternsResponse.ok) {
           throw new Error("Failed to fetch student data");
         }
 
-        const [history, patterns, monteCarloData, viData] = await Promise.all([
+        const [history, patterns, monteCarloData, viData, ensembleData, hmmData] = await Promise.all([
           historyResponse.json(),
           patternsResponse.json(),
           monteCarloResponse.json(),
-          viResponse.json()
+          viResponse.json(),
+          ensembleResponse.json(),
+          hmmResponse.json()
         ]);
 
         // Ensure we have arrays before updating state
@@ -124,6 +148,16 @@ export default function Index() {
         if (viResponse.ok && viData && !viData.error) {
           console.log('Setting VI data:', viData);
           setViData(viData);
+        }
+
+        if (ensembleResponse.ok && ensembleData && !ensembleData.error) {
+          console.log('Setting Ensemble data:', ensembleData);
+          setEnsembleData(ensembleData);
+        }
+
+        if (hmmResponse.ok && hmmData && !hmmData.error) {
+          console.log('Setting HMM data:', hmmData);
+          setHmmData(hmmData);
         }
       } catch (err) {
         console.error("handleStudentChange Error:", err);
@@ -148,52 +182,31 @@ export default function Index() {
 
       console.log("Submitting symbol:", { studentId: selectedStudentId, symbolId });
 
-      // Submit symbol and fetch all analyses in parallel
-      const [symbolResponse, monteCarloResponse, viResponse] = await Promise.all([
-        fetch("/api/symbols", {
-          method: "POST",
-          body: formData,
-        }),
-        fetch(`/api/montecarlo/${selectedStudentId}`),
-        fetch(`/api/vi/${selectedStudentId}`)
-      ]);
+      // Submit symbol and fetch updated data
+      const symbolResponse = await fetch("/api/symbols", {
+        method: "POST",
+        body: formData,
+      });
 
       if (!symbolResponse.ok) {
-        throw new Error("Failed to record symbol");
+        throw new Error("Failed to submit symbol");
       }
 
-      const [symbolData, monteCarloData, viData] = await Promise.all([
-        symbolResponse.json(),
-        monteCarloResponse.json(),
-        viResponse.json()
-      ]);
-
+      const symbolData = await symbolResponse.json();
       console.log("Symbol submission response:", symbolData);
-      console.log("Monte Carlo analysis:", monteCarloData);
-      console.log("VI analysis:", viData);
 
       if (symbolData.error) {
         throw new Error(symbolData.error);
       }
 
-      // Update symbols and entropy
-      const newSymbols = symbolData.recentSymbols || [];
-      console.log("Updating symbols:", newSymbols);
-      console.log("Updating entropy:", symbolData.entropy);
-
-      setSelectedSymbols(newSymbols);
-      setEntropy(symbolData.entropy);
-      setSymbolCount(symbolData.totalSymbols);
-      
-      if (monteCarloData && !monteCarloData.error) {
-        console.log('Setting Monte Carlo data after symbol update:', monteCarloData);
-        setMonteCarloData(monteCarloData);
-      }
-
-      if (viData && !viData.error) {
-        console.log('Setting VI data after symbol update:', viData);
-        setViData(viData);
-      }
+      // Update state with data from the response
+      setSelectedSymbols(symbolData.recentSymbols || []);
+      setEntropy(symbolData.entropy || 0);
+      setSymbolCount((count) => count + 1);
+      setMonteCarloData(symbolData.monteCarloData || null);
+      setViData(symbolData.viData || null);
+      setEnsembleData(symbolData.ensembleData || null);
+      setHmmData(symbolData.hmmData || null);
       
       setError(null);
     } catch (err) {
@@ -242,6 +255,22 @@ export default function Index() {
         console.log('Setting VI data:', viData);
         setViData(viData);
       }
+
+      const ensembleResponse = await fetch(`/api/ensemble/${selectedStudentId}`);
+      const ensembleData = await ensembleResponse.json();
+
+      if (ensembleResponse.ok && ensembleData && !ensembleData.error) {
+        console.log('Setting Ensemble data:', ensembleData);
+        setEnsembleData(ensembleData);
+      }
+
+      const hmmResponse = await fetch(`/api/hmm/${selectedStudentId}`);
+      const hmmData = await hmmResponse.json();
+
+      if (hmmResponse.ok && hmmData && !hmmData.error) {
+        console.log('Setting HMM data:', hmmData);
+        setHmmData(hmmData);
+      }
     } catch (err) {
       console.error('Failed to undo symbol:', err);
       setError(err instanceof Error ? err.message : 'Failed to undo symbol');
@@ -272,6 +301,8 @@ export default function Index() {
       setError(null);
       setMonteCarloData(null);
       setViData(null);
+      setEnsembleData(null);
+      setHmmData(null);
     } catch (err) {
       console.error('Failed to clear symbols:', err);
       setError(err instanceof Error ? err.message : 'Failed to clear symbols');
@@ -400,6 +431,8 @@ export default function Index() {
                   symbols={safeSymbols}
                   monteCarloData={monteCarloData}
                   viData={viData}
+                  ensembleData={ensembleData}
+                  hmmData={hmmData}
                 />
               </div>
             )}
