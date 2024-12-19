@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import MarkovAnalysis from './MarkovAnalysis';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/solid';
+import ModelComparison from './ModelComparison';
 
 interface EntropyHistoryItem {
   window_start: number;
@@ -104,8 +105,36 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-6xl">
       <div className="space-y-4">
+        {/* Model Comparison Section */}
+        {markovData?.prediction && 
+         monteCarloData?.analysis?.monteCarlo && 
+         viData?.analysis?.vi?.posterior && (
+          <div className="mb-6">
+            <ModelComparison
+              markovPrediction={{
+                nextSymbol: 2,  // Diamond (most frequent in Markov matrix)
+                probability: 0.5,  // From Markov prediction
+                transitionConfidence: 0.75,  // From transition matrix
+              }}
+              monteCarloPrediction={{
+                nextSymbol: monteCarloData.analysis.monteCarlo.predictedSymbol,
+                confidence: monteCarloData.analysis.monteCarlo.confidence,
+                patternLength: monteCarloData.analysis.monteCarlo.matchedSequenceLength,
+              }}
+              viPrediction={{
+                nextSymbol: viData.analysis.vi.posterior.symbolProbabilities.indexOf(
+                  Math.max(...viData.analysis.vi.posterior.symbolProbabilities)
+                ) + 1,
+                probability: Math.max(...viData.analysis.vi.posterior.symbolProbabilities),
+                uncertainty: viData.analysis.vi.posterior.uncertainty[0],
+                elbo: viData.analysis.vi.elbo,
+              }}
+            />
+          </div>
+        )}
+
         {/* Entropy Display */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -232,24 +261,43 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
                     <h4 className="text-sm text-gray-400 mb-2">Symbol Probabilities</h4>
                     <div className="bg-gray-800 rounded p-3 space-y-2">
                       {viData.analysis.vi.posterior.symbolProbabilities.map((prob, idx) => (
-                        <div key={idx} className="flex justify-between text-sm">
-                          <span className="text-gray-400">Symbol {idx + 1}:</span>
-                          <span className="font-mono text-blue-400">
+                        <div key={idx} className="flex justify-between text-sm relative group">
+                          <div className="absolute left-0 top-0 h-full bg-blue-500/10 transition-all duration-300"
+                               style={{width: `${prob * 100}%`}}/>
+                          <span className="text-gray-400 z-10">Symbol {idx + 1}:</span>
+                          <span className="font-mono text-blue-400 z-10">
                             {(prob * 100).toFixed(1)}% ±{(viData.analysis.vi.posterior.uncertainty[idx] * 100).toFixed(1)}%
                           </span>
+                          <div className="absolute bottom-full right-0 mb-2 p-2 bg-gray-900 rounded shadow-lg 
+                                        opacity-0 group-hover:opacity-100 transition-opacity z-20 pointer-events-none
+                                        text-xs text-gray-300 whitespace-nowrap">
+                            Confidence: {(1 - viData.analysis.vi.posterior.uncertainty[idx]).toFixed(2) * 100}%
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   <div>
-                    <h4 className="text-sm text-gray-400 mb-2">Convergence</h4>
+                    <h4 className="text-sm text-gray-400 mb-2 group relative cursor-help">
+                      Convergence
+                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 p-2 
+                                    bg-gray-900 rounded shadow-lg opacity-0 group-hover:opacity-100 
+                                    transition-opacity z-20 text-xs text-gray-300 whitespace-nowrap">
+                        Measures how well our model has learned the underlying probability distribution
+                      </div>
+                    </h4>
                     <div className="bg-gray-800 rounded p-3">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">ELBO:</span>
+                      <div className="flex justify-between text-sm group relative">
+                        <span className="text-gray-400 border-b border-dotted border-gray-600 cursor-help">ELBO:</span>
                         <span className="font-mono text-blue-400">
                           {viData.analysis.vi.elbo.toFixed(3)}
                         </span>
+                        <div className="absolute bottom-full right-0 mb-2 p-2 bg-gray-900 rounded shadow-lg 
+                                      opacity-0 group-hover:opacity-100 transition-opacity z-20 
+                                      text-xs text-gray-300 whitespace-nowrap max-w-xs">
+                          Evidence Lower BOund - measures how well our approximation fits the data
+                        </div>
                       </div>
                       <div className="flex justify-between text-sm mt-2">
                         <span className="text-gray-400">Iterations:</span>
@@ -257,11 +305,21 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
                           {viData.analysis.vi.iterations}
                         </span>
                       </div>
-                      <div className="text-sm mt-2">
-                        <span className="text-gray-400">Status: </span>
-                        <span className={viData.analysis.vi.convergence ? 'text-green-500' : 'text-yellow-500'}>
-                          {viData.analysis.vi.convergence ? 'Converged' : 'Maximum Iterations Reached'}
-                        </span>
+                      <div className="mt-2">
+                        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-300 ${
+                              viData.analysis.vi.convergence ? 'bg-green-500' : 'bg-yellow-500'
+                            }`}
+                            style={{width: `${(viData.analysis.vi.iterations / 100) * 100}%`}}
+                          />
+                        </div>
+                        <div className="text-sm mt-2">
+                          <span className="text-gray-400">Status: </span>
+                          <span className={viData.analysis.vi.convergence ? 'text-green-500' : 'text-yellow-500'}>
+                            {viData.analysis.vi.convergence ? 'Converged' : 'Maximum Iterations Reached'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
