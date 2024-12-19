@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import MarkovAnalysis from './MarkovAnalysis';
 import { ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/solid';
 import ModelComparison from './ModelComparison';
+import EnsembleDisplay from './EnsembleDisplay';
 
 interface EntropyHistoryItem {
   window_start: number;
@@ -25,9 +26,32 @@ interface EntropyDisplayProps {
   symbols: number[];
   monteCarloData: any | null;
   viData: any | null;
+  ensembleData: {
+    weights: Record<string, number>;
+    predictions: Record<string, {
+      nextSymbol: number;
+      confidence: number;
+    }>;
+  } | null;
+  hmmData: {
+    states: number[];
+    emission_probs: number[][];
+    prediction: {
+      nextSymbol: number;
+      confidence: number;
+    };
+  } | null;
 }
 
-function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viData }: EntropyDisplayProps) {
+function EntropyDisplay({ 
+  entropy = 0, 
+  studentId, 
+  symbols, 
+  monteCarloData, 
+  viData,
+  ensembleData,
+  hmmData 
+}: EntropyDisplayProps) {
   const [historicalEntropy, setHistoricalEntropy] = useState<EntropyHistoryItem[]>([]);
   const [markovData, setMarkovData] = useState<MarkovData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,6 +62,8 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
   const [isMarkovExpanded, setIsMarkovExpanded] = useState(true);
   const [isMonteCarloExpanded, setIsMonteCarloExpanded] = useState(true);
   const [isViExpanded, setIsViExpanded] = useState(true);
+  const [isEnsembleExpanded, setIsEnsembleExpanded] = useState(true);
+  const [isHMMExpanded, setIsHMMExpanded] = useState(true);
 
   // Ensure entropy is between 0 and 100
   const normalizedEntropy = Math.min(100, Math.max(0, entropy));
@@ -105,8 +131,10 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 max-w-6xl">
-      <div className="space-y-4">
+    <div className="w-full min-w-fit">
+      <div className="bg-gray-900/50 rounded-lg p-6 w-full overflow-hidden">
+        <h2 className="text-xl text-gray-300 mb-6">Randomness Level</h2>
+        
         {/* Model Comparison Section */}
         {markovData?.prediction && 
          monteCarloData?.analysis?.monteCarlo && 
@@ -136,23 +164,110 @@ function EntropyDisplay({ entropy = 0, studentId, symbols, monteCarloData, viDat
         )}
 
         {/* Entropy Display */}
-        <div>
+        <div className="bg-gray-900 rounded-lg p-6 w-full">
           <div className="flex items-center justify-between mb-2">
             <span className="text-gray-400">Current Entropy:</span>
-            <span className={`text-2xl font-mono ${getEntropyColor(normalizedEntropy)}`}>
+            <span className={`text-lg font-mono ${getEntropyColor(normalizedEntropy)}`}>
               {normalizedEntropy.toFixed(1)}%
             </span>
           </div>
-          <div className="h-2 bg-gray-700 rounded overflow-hidden">
+          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
             <div
-              className={`h-full ${getEntropyColor(normalizedEntropy)}`}
+              className={`h-full transition-all duration-300 ${getEntropyColor(normalizedEntropy)}`}
               style={{ width: `${normalizedEntropy}%` }}
             />
           </div>
-          <div className="mt-2 text-sm">
+          <p className={`mt-2 text-sm ${getEntropyColor(normalizedEntropy)}`}>
             {getEntropyMessage(normalizedEntropy)}
-          </div>
+          </p>
         </div>
+
+        {/* Ensemble Model Analysis */}
+        {ensembleData && (
+          <div className={`mt-6 ${isEnsembleExpanded ? '' : 'hidden'}`}>
+            <div
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setIsEnsembleExpanded(!isEnsembleExpanded)}
+            >
+              <h3 className="text-lg font-semibold text-gray-200">
+                Ensemble Model Analysis
+              </h3>
+              {isEnsembleExpanded ? (
+                <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+              ) : (
+                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+              )}
+            </div>
+            <div className="mt-4">
+              <EnsembleDisplay ensembleData={ensembleData} />
+            </div>
+          </div>
+        )}
+
+        {/* HMM Analysis */}
+        {hmmData && (
+          <div className={`mt-6 ${isHMMExpanded ? '' : 'hidden'}`}>
+            <div
+              className="flex items-center justify-between cursor-pointer"
+              onClick={() => setIsHMMExpanded(!isHMMExpanded)}
+            >
+              <h3 className="text-lg font-semibold text-gray-200">
+                Hidden Markov Model Analysis
+              </h3>
+              {isHMMExpanded ? (
+                <ChevronUpIcon className="h-5 w-5 text-gray-400" />
+              ) : (
+                <ChevronDownIcon className="h-5 w-5 text-gray-400" />
+              )}
+            </div>
+            <div className="mt-4">
+              <div className="bg-gray-800 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* State Probabilities */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h4 className="text-gray-200 font-medium mb-2">State Analysis</h4>
+                    <div className="space-y-2">
+                      {hmmData.states.map((state, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span className="text-gray-400">
+                            State {state}:
+                          </span>
+                          <span className="text-gray-200">
+                            {(hmmData.emission_probs[idx][0] * 100).toFixed(1)}% ♥,
+                            {(hmmData.emission_probs[idx][1] * 100).toFixed(1)}% ♦,
+                            {(hmmData.emission_probs[idx][2] * 100).toFixed(1)}% ♣,
+                            {(hmmData.emission_probs[idx][3] * 100).toFixed(1)}% ♠
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Prediction */}
+                  <div className="bg-gray-700 rounded-lg p-4">
+                    <h4 className="text-gray-200 font-medium mb-2">Next Symbol Prediction</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Predicted Symbol:</span>
+                        <span className="text-gray-200">Symbol {hmmData.prediction.nextSymbol}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Confidence:</span>
+                        <span className={`font-medium ${
+                          hmmData.prediction.confidence > 75 ? 'text-green-400' :
+                          hmmData.prediction.confidence > 50 ? 'text-yellow-400' :
+                          'text-red-400'
+                        }`}>
+                          {hmmData.prediction.confidence.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Markov Analysis Section */}
         {markovData && (

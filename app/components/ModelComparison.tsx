@@ -86,34 +86,30 @@ const ModelComparison: React.FC<ModelComparisonProps> = ({
   };
 
   const symbolToCard = (symbol: number) => {
-    const suits = ['♠', '♥', '♣', '♦'];
+    const suits = ['', '', '', ''];
     return suits[symbol];
   };
 
   return (
-    <div className="bg-gray-900 rounded-lg p-4">
+    <div className="w-full">
       <h3 className="text-lg text-gray-300 mb-4">Model Predictions</h3>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 auto-rows-fr">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-gray-900/50 p-4 rounded-lg">
         {models.map((model, idx) => (
           <div
             key={idx}
-            className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors"
+            className="bg-gray-800/50 rounded-lg p-4 border border-gray-700"
           >
             <div className="flex items-center space-x-3 mb-4">
-              <span className="text-gray-400">
-                {getModelIcon(model.modelName)}
-              </span>
-              <h4 className="text-gray-300 text-sm whitespace-nowrap">{model.modelName}</h4>
+              <span className="text-gray-400">{getModelIcon(model.modelName)}</span>
+              <h4 className="text-gray-300">{model.modelName}</h4>
             </div>
-
             <div className="space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Next:</span>
+                <span className="text-gray-400">Next:</span>
                 <span className="text-2xl font-mono">
                   {symbolToCard(model.nextSymbol)}
                 </span>
               </div>
-
               <div>
                 <div className="flex justify-between text-sm mb-1">
                   <span className="text-gray-400">Confidence:</span>
@@ -123,18 +119,17 @@ const ModelComparison: React.FC<ModelComparisonProps> = ({
                 </div>
                 <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-300 ${getConfidenceColor(model.confidence)}`}
+                    className={`h-full ${getConfidenceColor(model.confidence)}`}
                     style={{ width: `${model.confidence * 100}%` }}
                   />
                 </div>
               </div>
-
               {model.additionalInfo && (
-                <div className="pt-2 border-t border-gray-700 space-y-1">
+                <div className="space-y-1">
                   {Object.entries(model.additionalInfo).map(([key, value]) => (
-                    <div key={key} className="flex justify-between text-sm items-center">
-                      <span className="text-gray-400 text-xs">{key}:</span>
-                      <span className="text-gray-300 font-mono text-sm ml-2">{value}</span>
+                    <div key={key} className="flex justify-between text-sm">
+                      <span className="text-gray-400">{key}:</span>
+                      <span className="text-gray-300 font-mono">{value}</span>
                     </div>
                   ))}
                 </div>
