@@ -92,12 +92,23 @@ export const action: ActionFunction = async ({ request }) => {
       }
     });
 
+    // Get total symbol count
+    const countResult = await db.$queryRaw`
+      SELECT COUNT(*) as total_symbols
+      FROM symbol_observations
+      WHERE student_id = ${studentId}
+    `;
+
+    const totalSymbols = Number(countResult[0]?.total_symbols || 0);
+    console.log("Updated total symbols:", totalSymbols);
+
     return json({ 
       success: true, 
       observation,
       session,
       entropy,
-      recentSymbols: symbols
+      recentSymbols: symbols,
+      totalSymbols
     });
   } catch (error) {
     console.error("Failed to process symbol:", error);

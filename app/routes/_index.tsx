@@ -16,6 +16,7 @@ export default function Index() {
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
   const [selectedSymbols, setSelectedSymbols] = useState<number[]>([]);
   const [entropy, setEntropy] = useState<number | null>(null);
+  const [symbolCount, setSymbolCount] = useState<number>(0);
   const [patterns, setPatterns] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -29,10 +30,33 @@ export default function Index() {
     console.log("Safe Symbols Array:", safeSymbols);
   }, [selectedSymbols]);
 
+  // Fetch symbol count whenever student changes
+  useEffect(() => {
+    const fetchSymbolCount = async () => {
+      if (!selectedStudentId) {
+        setSymbolCount(0);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/symbols/count/${selectedStudentId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch symbol count');
+        }
+        const data = await response.json();
+        setSymbolCount(data.totalSymbols);
+      } catch (err) {
+        console.error('Failed to fetch symbol count:', err);
+      }
+    };
+
+    fetchSymbolCount();
+  }, [selectedStudentId]);
+
   const handleStudentChange = async (studentId: number | null) => {
     console.log("handleStudentChange - Start, studentId:", studentId);
     setSelectedStudentId(studentId);
-    setSelectedSymbols([]); // Reset symbols immediately
+    setSelectedSymbols([]);
     setEntropy(null);
     setPatterns([]);
     setError(null);
@@ -104,10 +128,69 @@ export default function Index() {
 
       setSelectedSymbols(newSymbols);
       setEntropy(data.entropy);
+      setSymbolCount(data.totalSymbols);
       setError(null);
     } catch (err) {
       console.error("handleSymbolClick Error:", err);
       setError(err instanceof Error ? err.message : "An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUndo = async () => {
+    if (!selectedStudentId) {
+      setError("Please select a student first");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/symbols/undo/${selectedStudentId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to undo symbol');
+      }
+
+      const data = await response.json();
+      setSelectedSymbols(data.recentSymbols || []);
+      setEntropy(data.entropy);
+      setSymbolCount(data.totalSymbols);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to undo symbol:', err);
+      setError(err instanceof Error ? err.message : 'Failed to undo symbol');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!window.confirm('Are you sure you want to clear ALL symbols for ALL students? This action cannot be undone.')) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/symbols/clear', {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to clear symbols');
+      }
+
+      // Reset all state
+      setSelectedSymbols([]);
+      setEntropy(null);
+      setSymbolCount(0);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to clear symbols:', err);
+      setError(err instanceof Error ? err.message : 'Failed to clear symbols');
     } finally {
       setIsLoading(false);
     }
@@ -126,12 +209,40 @@ export default function Index() {
           </p>
         </div>
 
-        {/* Student Selector */}
-        <div className="mb-8">
-          <StudentSelector
-            onStudentChange={handleStudentChange}
-            selectedStudentId={selectedStudentId}
-          />
+        {/* Student Selector and Controls */}
+        <div className="mb-8 space-y-4">
+          <div className="flex items-center justify-between">
+            <StudentSelector
+              onStudentChange={handleStudentChange}
+              selectedStudentId={selectedStudentId}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleUndo}
+                disabled={!selectedStudentId || isLoading || symbolCount === 0}
+                className={`px-4 py-2 rounded-lg text-sm font-medium
+                  ${!selectedStudentId || isLoading || symbolCount === 0
+                    ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                    : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                  } transition-colors`}
+              >
+                Undo Last
+              </button>
+              <button
+                onClick={handleClearAll}
+                disabled={isLoading}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+          
+          {selectedStudentId && (
+            <div className="text-center text-gray-400">
+              <span className="font-semibold text-yellow-500">{symbolCount}</span> symbols collected
+            </div>
+          )}
           {error && (
             <div className="mt-2 text-red-500 text-sm">{error}</div>
           )}
